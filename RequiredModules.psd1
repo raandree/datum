@@ -1,5 +1,4 @@
 @{
-    # Set up a mini virtual environment...
     PSDependOptions             = @{
         AddToPath  = $true
         Target     = 'output\RequiredModules'
@@ -9,7 +8,7 @@
 
     InvokeBuild                 = 'latest'
     PSScriptAnalyzer            = 'latest'
-    Pester                      = 'latest'
+    Pester                      = '4.10.1'
     'DscResource.Test'          = 'latest'
     'DscResource.AnalyzerRules' = 'latest'
     #'DscResource.Common'        = 'latest'
