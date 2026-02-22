@@ -4,6 +4,8 @@ The `Datum.yml` file defines the structure, behaviour, and extensions of a Datum
 
 ## Complete Example
 
+The following example is modelled after the [DscWorkshop](https://github.com/dsccommunity/DscWorkshop) project, which is the reference implementation for Datum-based DSC configuration management.
+
 ```yaml
 DatumStructure:
   - StoreName: AllNodes
@@ -11,28 +13,39 @@ DatumStructure:
     StoreOptions:
       Path: ./AllNodes
 
+  - StoreName: Environment
+    StoreProvider: Datum::File
+    StoreOptions:
+      Path: ./Environment
+
+  - StoreName: Locations
+    StoreProvider: Datum::File
+    StoreOptions:
+      Path: ./Locations
+
   - StoreName: Roles
     StoreProvider: Datum::File
     StoreOptions:
       Path: ./Roles
 
-  - StoreName: Environments
+  - StoreName: Baselines
     StoreProvider: Datum::File
     StoreOptions:
-      Path: ./Environments
+      Path: ./Baselines
 
-  - StoreName: SiteData
+  - StoreName: Global
     StoreProvider: Datum::File
     StoreOptions:
-      Path: ./SiteData
+      Path: ./Global
 
 ResolutionPrecedence:
-  - 'AllNodes\$($Node.Environment)\$($Node.Name)'
-  - 'AllNodes\$($Node.Environment)\All'
-  - 'Environments\$($Node.Environment)'
-  - 'SiteData\$($Node.Location)'
+  - 'AllNodes\$($Node.Environment)\$($Node.NodeName)'
+  - 'Environment\$($Node.Environment)'
+  - 'Locations\$($Node.Location)'
   - 'Roles\$($Node.Role)'
-  - 'Roles\All'
+  - 'Baselines\Security'
+  - 'Baselines\$($Node.Baseline)'
+  - 'Baselines\DscLcm'
 
 default_lookup_options: MostSpecific
 
@@ -46,12 +59,11 @@ lookup_options:
       tuple_keys:
         - Name
 
-DatumHandlers:
-  Datum::TestHandler:
-    CommandOptions:
-      Password: P@ssw0rd
-      Test: test
+DatumHandlersThrowOnError: true
 
+DscLocalConfigurationManagerKeyName: LcmConfig
+
+DatumHandlers:
   Datum.ProtectedData::ProtectedDatum:
     CommandOptions:
       PlainTextPassword: true
@@ -116,12 +128,13 @@ An ordered list of path prefixes, from **most specific** to **most generic**. Wh
 
 ```yaml
 ResolutionPrecedence:
-  - 'AllNodes\$($Node.Environment)\$($Node.Name)'
-  - 'AllNodes\$($Node.Environment)\All'
-  - 'Environments\$($Node.Environment)'
-  - 'SiteData\$($Node.Location)'
+  - 'AllNodes\$($Node.Environment)\$($Node.NodeName)'
+  - 'Environment\$($Node.Environment)'
+  - 'Locations\$($Node.Location)'
   - 'Roles\$($Node.Role)'
-  - 'Roles\All'
+  - 'Baselines\Security'
+  - 'Baselines\$($Node.Baseline)'
+  - 'Baselines\DscLcm'
 ```
 
 #### Variable Substitution
@@ -130,12 +143,16 @@ Paths support PowerShell variable substitution using `$()` syntax. The `$Node` v
 
 | Expression | Resolves To |
 |-----------|-------------|
-| `$($Node.Name)` | The node's name |
+| `$($Node.Name)` | The node's file name in the `AllNodes` store (set by the FileProvider) |
+| `$($Node.NodeName)` | The node's logical name (typically set in the data file itself) |
 | `$($Node.Environment)` | The node's environment |
 | `$($Node.Location)` | The node's location |
 | `$($Node.Role)` | The node's role |
+| `$($Node.Baseline)` | The node's baseline profile (e.g. `Server`) |
 
 Any property of the node hashtable can be referenced.
+
+> **Tip:** `$Node.Name` is the file name of the node data file (set automatically by the FileProvider). `$Node.NodeName` is typically set inside the data file itself, often using `'[x={ $Node.Name }=]'` via InvokeCommand to derive it from the file name.
 
 #### Path Format
 
@@ -145,15 +162,16 @@ Any property of the node hashtable can be referenced.
 
 #### Resolution Example
 
-For a node with `Name = 'SRV01'`, `Environment = 'DEV'`, `Location = 'London'`, `Role = 'WebServer'`:
+For a node with `Name = 'DSCWeb01'`, `NodeName = 'DSCWeb01'`, `Environment = 'Dev'`, `Location = 'Frankfurt'`, `Role = 'WebServer'`, `Baseline = 'Server'`:
 
 ```
-AllNodes\DEV\SRV01        →  $Datum.AllNodes.DEV.SRV01.<PropertyPath>
-AllNodes\DEV\All          →  $Datum.AllNodes.DEV.All.<PropertyPath>
-Environments\DEV          →  $Datum.Environments.DEV.<PropertyPath>
-SiteData\London           →  $Datum.SiteData.London.<PropertyPath>
+AllNodes\Dev\DSCWeb01     →  $Datum.AllNodes.Dev.DSCWeb01.<PropertyPath>
+Environment\Dev           →  $Datum.Environment.Dev.<PropertyPath>
+Locations\Frankfurt       →  $Datum.Locations.Frankfurt.<PropertyPath>
 Roles\WebServer           →  $Datum.Roles.WebServer.<PropertyPath>
-Roles\All                 →  $Datum.Roles.All.<PropertyPath>
+Baselines\Security        →  $Datum.Baselines.Security.<PropertyPath>
+Baselines\Server          →  $Datum.Baselines.Server.<PropertyPath>
+Baselines\DscLcm          →  $Datum.Baselines.DscLcm.<PropertyPath>
 ```
 
 ---
@@ -256,6 +274,7 @@ DatumHandlers:
 #### Handler Function Naming
 
 The key `<ModuleName>::<HandlerName>` maps to:
+
 - Filter: `<ModuleName>\Test-<HandlerName>Filter`
 - Action: `<ModuleName>\Invoke-<HandlerName>Action`
 
@@ -278,39 +297,124 @@ See [Datum Handlers](DatumHandlers.md) for detailed documentation.
 When defined, specifies the key name within each node's data that contains LCM (Local Configuration Manager) settings. This is used during RSOP computation.
 
 ```yaml
-DscLocalConfigurationManagerKeyName: LCM_Config
+DscLocalConfigurationManagerKeyName: LcmConfig
+```
+
+#### DatumHandlersThrowOnError
+
+When set to `true`, any error thrown by a Datum Handler will propagate as a terminating error rather than being silently swallowed. **Recommended for production use** — without this, a handler failure (e.g. a failed decryption or expression) can return the raw marker string (such as `[ENC=...]`) instead of the decrypted value, which is difficult to diagnose.
+
+```yaml
+DatumHandlersThrowOnError: true
+```
+
+### Global Data Stores
+
+Not every store needs to appear in `ResolutionPrecedence`. Stores defined in `DatumStructure` but absent from `ResolutionPrecedence` act as **global data stores** — they are accessible through `$Datum.<StoreName>` but are never merged into a node's RSOP automatically.
+
+This pattern is used for shared, non-node-specific data such as domain settings, Azure subscription details, or shared credentials:
+
+```yaml
+DatumStructure:
+  # ... node-specific stores ...
+
+  - StoreName: Global
+    StoreProvider: Datum::File
+    StoreOptions:
+      Path: ./Global
+```
+
+Access global data directly:
+
+```powershell
+$Datum.Global.Domain.DomainFqdn       # → 'contoso.com'
+$Datum.Global.Azure.SubscriptionId     # → 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+```
+
+Or reference global data from within node/role data files via [Datum.InvokeCommand](DatumHandlers.md):
+
+```yaml
+# In a role or node data file
+DomainName: '[x={ $Datum.Global.Domain.DomainFqdn }=]'
+DomainJoinCredential: '[x={ $Datum.Global.Domain.DomainJoinCredentials }=]'
+```
+
+This keeps shared values in a single place while letting any layer reference them.
+
+### Baselines Pattern
+
+The **Baselines** pattern groups low-priority default data into multiple sub-layers that appear at the bottom of the resolution precedence. Each sub-layer represents a functional concern (security hardening, LCM configuration, etc.).
+
+```yaml
+ResolutionPrecedence:
+  # ... higher-priority layers ...
+  - 'Baselines\Security'           # Static — applies to all nodes
+  - 'Baselines\$($Node.Baseline)'  # Dynamic — selected per node
+  - 'Baselines\DscLcm'             # Static — LCM defaults for all nodes
+```
+
+Nodes select their dynamic baseline via a property:
+
+```yaml
+# AllNodes/Dev/DSCWeb01.yml
+Baseline: Server
+```
+
+Baseline files contribute `Configurations`, security settings, and other defaults at the lowest priority, so any higher layer can override them:
+
+```yaml
+# Baselines/Security.yml
+WindowsFeatures:
+  Name:
+    - -Telnet-Client     # Knockout prefix — ensures Telnet is removed
+
+# Baselines/Server.yml
+Configurations:
+  - ComputerSettings
+  - NetworkIpConfiguration
+  - WindowsEventLogs
 ```
 
 ---
 
 ## File System Layout
 
-A typical Datum configuration data tree:
+A typical Datum configuration data tree (modelled after the [DscWorkshop](https://github.com/dsccommunity/DscWorkshop) reference implementation):
 
 ```
 ConfigData/
 ├── Datum.yml                    # This configuration file
 ├── AllNodes/
-│   ├── DEV/
-│   │   ├── SRV01.yml           # Node-specific data
-│   │   ├── SRV02.yml
-│   │   └── All.yml             # Shared data for all DEV nodes
-│   └── PROD/
-│       ├── SRV03.yml
-│       └── All.yml
-├── Environments/
-│   ├── DEV.yml                  # Environment-level defaults
-│   └── PROD.yml
-├── SiteData/
-│   ├── London.yml               # Location-specific data
-│   └── NewYork.yml
-└── Roles/
-    ├── WebServer.yml            # Role definitions
-    ├── FileServer.yml
-    └── All.yml                  # Data shared across all roles
+│   ├── Dev/
+│   │   ├── DSCFile01.yml        # Node-specific data
+│   │   └── DSCWeb01.yml
+│   ├── Prod/
+│   │   └── DSCWeb02.yml
+│   └── Test/
+│       └── DSCFile02.yml
+├── Environment/
+│   ├── Dev.yml                  # Environment-level defaults
+│   ├── Prod.yml
+│   └── Test.yml
+├── Locations/
+│   ├── Frankfurt.yml            # Location-specific data
+│   └── Singapore.yml
+├── Roles/
+│   ├── FileServer.yml           # Role definitions
+│   ├── WebServer.yml
+│   └── DomainController.yml
+├── Baselines/
+│   ├── Security.yml             # Static baseline — all nodes
+│   ├── Server.yml               # Dynamic baseline — selected per node
+│   └── DscLcm.yml               # Static baseline — LCM defaults
+└── Global/
+    ├── Domain.yml               # Shared domain settings (credentials, FQDN)
+    └── Azure.yml                # Shared Azure subscription info
 ```
 
 Each directory under a store becomes an intermediate node. Each `.yml`, `.json`, or `.psd1` file becomes a leaf with its parsed contents.
+
+The `Global/` store is not in `ResolutionPrecedence` — it is accessed directly via `$Datum.Global.*` or referenced from data files using InvokeCommand expressions.
 
 ## See Also
 

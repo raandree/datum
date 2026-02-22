@@ -22,6 +22,7 @@ DatumHandlers:
 ```
 
 This instructs Datum to:
+
 1. Call `<ModuleName>\Test-<HandlerName>Filter` with the value
 2. If it returns `$true`, call `<ModuleName>\Invoke-<HandlerName>Action`
 
@@ -35,9 +36,22 @@ Datum automatically populates parameters of the action function from available v
 | `$Datum` | The full Datum tree |
 | `$Node` | The current node (if in a node context) |
 | `$PropertyPath` | The property path being looked up |
+| `$File` | A `[System.IO.FileInfo]` object for the data file being processed (see [The `$File` Variable](#the-file-variable)) |
 | Any `CommandOptions` key | Values from the Datum.yml configuration |
 
 You do not need to pass these explicitly — Datum matches parameter names to available variables and `CommandOptions` keys.
+
+## Error Handling
+
+By default, handler errors are silently ignored and the raw marker string is returned as-is. This means a failed `[ENC=...]` decryption or broken `[x= ... =]` expression silently returns the unprocessed value, which can be very hard to diagnose.
+
+Set `DatumHandlersThrowOnError` in `Datum.yml` to surface handler failures as terminating errors:
+
+```yaml
+DatumHandlersThrowOnError: true
+```
+
+**This setting is recommended for all production use.** Without it, a misconfigured certificate or a typo in an expression can go unnoticed until the resulting MOF is applied.
 
 ## Built-In Test Handler
 
@@ -147,6 +161,27 @@ When Datum resolves this value, the `ProtectedDatum` handler:
 
 This allows credentials to be stored securely in version control while being transparently decrypted at lookup time.
 
+### Real-World Example
+
+In the [DscWorkshop](https://github.com/dsccommunity/DscWorkshop) project, encrypted credentials are stored in a shared `Global/Domain.yml` file:
+
+```yaml
+# Global/Domain.yml
+DomainFqdn: contoso.com
+DomainDn: DC=contoso,DC=com
+DomainAdminCredentials: '[ENC=PE9ianM...]'
+DomainJoinCredentials: '[ENC=PE9ianM...]'
+```
+
+Other layers reference these credentials via InvokeCommand expressions:
+
+```yaml
+# Roles/DomainController.yml
+DomainJoinCredential: '[x={ $Datum.Global.Domain.DomainJoinCredentials }=]'
+```
+
+This keeps credentials in one place and decrypts them transparently during RSOP compilation.
+
 ## Datum.InvokeCommand — Dynamic Expressions
 
 The [Datum.InvokeCommand](https://www.powershellgallery.com/packages/Datum.InvokeCommand) module enables PowerShell expressions to be evaluated dynamically at lookup time.
@@ -180,11 +215,72 @@ DynamicPath: '[x= { Join-Path $env:ProgramFiles "MyApp" } =]'
 
 When resolved, the scriptblock is executed and the result replaces the marker.
 
+### The `$File` Variable
+
+Inside `[x= ... =]` expressions, the `$File` variable is a `[System.IO.FileInfo]` object representing the data file currently being processed. This makes data files **location-aware** — they can derive values from their own file name or directory without hard-coding.
+
+| Expression | Returns | Example |
+|-----------|---------|--------|
+| `$File.BaseName` | File name without extension | `DSCWeb01` |
+| `$File.Name` | File name with extension | `DSCWeb01.yml` |
+| `$File.Directory.BaseName` | Parent directory name | `Dev` |
+| `$File.Directory.FullName` | Full parent directory path | `C:\ConfigData\AllNodes\Dev` |
+
+#### Practical Examples
+
+Derive a node's `NodeName` from its file name:
+
+```yaml
+# AllNodes/Dev/DSCWeb01.yml
+NodeName: '[x={ $Node.Name }=]'             # → DSCWeb01
+Environment: '[x={ $File.Directory.BaseName }=]'  # → Dev
+```
+
+Use the file's base name in generated paths:
+
+```yaml
+# Locations/Frankfurt.yml
+FileSystemObjects:
+  Items:
+    - DestinationPath: '[x= "C:\Test\$($File.BaseName)" =]'  # → C:\Test\Frankfurt
+```
+
+> **Note:** `$Node.Name` is set automatically by the FileProvider from the data file's base name. This is distinct from `$Node.NodeName`, which is a property typically set *inside* the data file. In practice, `$Node.Name` is available first and is commonly used to bootstrap `NodeName`.
+
+### Cross-Datum References
+
+Expressions can reach into any part of the Datum tree via the `$Datum` variable. This is useful for referencing shared data stored in a [Global data store](DatumYml.md#global-data-stores):
+
+```yaml
+# Roles/DomainController.yml
+DomainName: '[x={ $Datum.Global.Domain.DomainFqdn }=]'
+DomainCredential: '[x={ $Datum.Global.Domain.DomainJoinCredentials }=]'
+```
+
+You can also reference baselines or other layers:
+
+```yaml
+NodeVersion: '[x={ $Datum.Baselines.DscLcm.DscTagging.Version }=]'
+```
+
+### Source Tracking with `Get-DatumSourceFile`
+
+The `Get-DatumSourceFile` function can be called inside expressions to record which file contributed data. This is used by the DscTagging pattern to track layer provenance:
+
+```yaml
+# Baselines/DscLcm.yml
+DscTagging:
+  Layers:
+    - '[x={ Get-DatumSourceFile -Path $File }=]'
+```
+
+As each layer file adds its own entry via the `Unique` merge strategy, the final RSOP contains a complete list of which files contributed to the node.
+
 ### Known Limitations
 
 - Expressions are evaluated in the current PowerShell session context
 - Complex expressions with nested quotes may need careful escaping
-- Error handling within expressions is the responsibility of the expression author
+- Error handling within expressions is the responsibility of the expression author (see [Error Handling](#error-handling))
 
 ## Building Custom Handlers
 

@@ -22,29 +22,51 @@ the [video recording](https://www.youtube.com/watch?v=SyYuxmiEgZ4&pp=ygULRHNjV29
 
 ## Table of Contents
 
-1. [Installation](#1-installation)
-2. [Why Datum?](#2-why-datum)
-3. [Getting Started & Concepts](#3-getting-started--concepts)
-   - [Data Layers and Precedence](#data-layers-and-precedence)
-   - [Path Relative to $Node](#path-relative-to-node)
-4. [Intended Usage](#4-intended-usage)
-   - [Policy for a Role](#policy-for-role-windowsserverdefault)
-   - [Node Specific Data](#node-specific-data)
-   - [DSC Composite Resource Example](#excerpt-of-dsc-composite-resource-aka-configuration)
-   - [Root Configuration](#root-configuration)
-5. [Under the Hood](#5-under-the-hood)
-   - [Building a Datum Hierarchy](#building-a-datum-hierarchy)
-   - [Store Providers](#store-provider)
-   - [Lookups and Overrides](#lookups-and-overrides-in-hierarchy)
-   - [Variable Substitution](#variable-substitution-in-path-prefixes)
-   - [Merge Strategies](#lookup-merging-behaviour)
-   - [Knockout Prefix](#knockout-prefix)
-   - [RSOP (Resultant Set of Policy)](#rsop-resultant-set-of-policy)
-   - [RSOP Caching](#rsop-caching)
-   - [Datum Handlers](#datum-handlers)
-6. [Public Functions](#6-public-functions)
-7. [Further Reading](#7-further-reading)
-8. [Origins](#8-origins)
+- [Datum](#datum)
+  - [Table of Contents](#table-of-contents)
+  - [1. Installation](#1-installation)
+    - [From PowerShell Gallery](#from-powershell-gallery)
+    - [Optional Handler Modules](#optional-handler-modules)
+  - [2. Why Datum?](#2-why-datum)
+    - [Inspiration](#inspiration)
+  - [3. Getting Started \& Concepts](#3-getting-started--concepts)
+    - [Data Layers and Precedence](#data-layers-and-precedence)
+    - [Path Relative to $Node](#path-relative-to-node)
+  - [4. Intended Usage](#4-intended-usage)
+    - [_Policy for Role 'WindowsServerDefault'_](#policy-for-role-windowsserverdefault)
+    - [_Node Specific Data_](#node-specific-data)
+    - [_Excerpt of DSC Composite Resource (aka. Configuration)_](#excerpt-of-dsc-composite-resource-aka-configuration)
+    - [_Root Configuration_](#root-configuration)
+  - [5. Under the Hood](#5-under-the-hood)
+    - [Building a Datum Hierarchy](#building-a-datum-hierarchy)
+      - [Datum Tree Root Branches](#datum-tree-root-branches)
+      - [Store Provider](#store-provider)
+    - [Lookups and Overrides in Hierarchy](#lookups-and-overrides-in-hierarchy)
+    - [Variable Substitution in Path Prefixes](#variable-substitution-in-path-prefixes)
+    - [Lookup Merging Behaviour](#lookup-merging-behaviour)
+      - [Configuring Merge Behaviour](#configuring-merge-behaviour)
+      - [Strategy Presets](#strategy-presets)
+      - [Custom Strategy Structure](#custom-strategy-structure)
+      - [Hash Array Merge Strategies](#hash-array-merge-strategies)
+      - [Regex-Based Lookup Options](#regex-based-lookup-options)
+      - [Subkey Merge Behaviour](#subkey-merge-behaviour)
+    - [Knockout Prefix](#knockout-prefix)
+    - [RSOP (Resultant Set of Policy)](#rsop-resultant-set-of-policy)
+    - [RSOP Caching](#rsop-caching)
+    - [Datum Handlers](#datum-handlers)
+      - [Built-In Test Handler](#built-in-test-handler)
+      - [Datum.ProtectedData - Encrypted Credentials](#datumprotecteddata---encrypted-credentials)
+      - [Datum.InvokeCommand - Dynamic Expressions](#datuminvokecommand---dynamic-expressions)
+      - [Building Custom Handlers](#building-custom-handlers)
+  - [6. Public Functions](#6-public-functions)
+    - [Core Functions](#core-functions)
+    - [RSOP Functions](#rsop-functions)
+    - [Data \& Provider Functions](#data--provider-functions)
+    - [Strategy Functions](#strategy-functions)
+    - [Handler Functions](#handler-functions)
+  - [7. Further Reading](#7-further-reading)
+    - [External Resources](#external-resources)
+  - [8. Origins](#8-origins)
 
 -------
 
@@ -680,6 +702,7 @@ DatumHandlers:
 ```
 
 The action function's parameters are automatically populated from:
+
 - `CommandOptions` defined in `Datum.yml`
 - Available variables (`$Datum`, `$InputObject`, `$Node`, `$PropertyPath`, etc.)
 
@@ -733,14 +756,16 @@ The action function's parameters are automatically populated from:
 
 - **[Datum.yml Reference](docs/DatumYml.md)** — Complete configuration file reference
 - **[Merging Strategies](docs/Merging.md)** — Detailed guide to all merge behaviours with examples
-- **[Datum Handlers](docs/DatumHandlers.md)** — How to use and build data handlers
+- **[Datum Handlers](docs/DatumHandlers.md)** — How to use and build data handlers (including `$File` variable, cross-datum references, and encrypted credentials)
+- **[RSOP](docs/RSOP.md)** — Resultant Set of Policy: computing and testing merged node data
 - **[Composing DSC Roles](docs/ComposingRoles.md)** — The Roles & Configurations model for DSC
 - **[DSC Code Layers](docs/CodeLayers.md)** — Understanding the layered DSC composition model
 - **[Cmdlet Reference](docs/CmdletReference.md)** — Detailed reference for all public functions
 
 ### External Resources
 
-- [DSC Workshop Repository](https://github.com/dsccommunity/DscWorkshop/) — Complete reference implementation
+- [DSC Workshop Repository](https://github.com/dsccommunity/DscWorkshop/) — Complete reference implementation using Datum with a 7-layer hierarchy, Global data stores, Baselines pattern, encrypted credentials, and dynamic expressions
+- [DscConfig.Demo](https://github.com/dsccommunity/DscConfig.Demo/) — Composite DSC resources used with DSC Workshop
 - [Infrastructure As Code](http://infrastructure-as-code.com/book/) by Kief Morris
 - [The DSC Configuration Data Problem](https://gaelcolas.com/2018/01/29/the-dsc-configuration-data-problem/) by Gael Colas
 
