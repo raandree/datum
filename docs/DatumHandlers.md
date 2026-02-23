@@ -134,17 +134,65 @@ The [Datum.ProtectedData](https://www.powershellgallery.com/packages/Datum.Prote
 Install-Module -Name Datum.ProtectedData -Scope CurrentUser
 ```
 
+This also installs the [ProtectedData](https://www.powershellgallery.com/packages/ProtectedData) module by Dave Wyatt, which provides the underlying encryption engine.
+
 ### Configuration
 
+The handler is registered in `Datum.yml`. Use **one** of the two parameter sets:
+
 ```yaml
+# PRODUCTION — decrypt using a certificate
 DatumHandlers:
   Datum.ProtectedData::ProtectedDatum:
     CommandOptions:
-      PlainTextPassword: true
-      # Certificate or other encryption key options
+      Certificate: 0A1B2C3D4E5F...   # thumbprint, cert file path, or cert: provider path
+
+# TESTING ONLY — decrypt using a plain-text password
+DatumHandlers:
+  Datum.ProtectedData::ProtectedDatum:
+    CommandOptions:
+      PlainTextPassword: P@ssw0rd
 ```
 
-### Usage
+> **Warning:** `PlainTextPassword` is intended for development and testing only. In production, always use a certificate whose private key is available on the build/compilation machine.
+
+### Encrypting Data with `Protect-Datum`
+
+Before an encrypted value can appear in a data file, you must create the encrypted blob with the `Protect-Datum` helper function:
+
+```powershell
+# Using a certificate (production)
+$credential = Get-Credential
+$blob = Protect-Datum -InputObject $credential -Certificate '0A1B2C3D4E5F...'
+# → '[ENC=PE9ianM...long base64...=]'
+
+# Using a password (testing)
+$securePassword = ConvertTo-SecureString -AsPlainText -Force 'P@ssw0rd'
+$blob = Protect-Datum -InputObject $credential -Password $securePassword
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `InputObject` | `[PSObject]` | The object to encrypt (credential, secure string, or any serialisable object) |
+| `Certificate` | `[string]` | Certificate thumbprint, file path, or cert provider path |
+| `Password` | `[SecureString]` | Encryption password (testing only) |
+| `MaxLineLength` | `[int]` | Line-wrap width for the base64 block (default: 100) |
+| `Header` / `Footer` | `[string]` | Encapsulation markers (defaults: `[ENC=` / `]`) |
+| `NoEncapsulation` | `[switch]` | Emit the raw base64 without header/footer |
+
+Paste the returned string into your YAML data file.
+
+### Decrypting Data Manually with `Unprotect-Datum`
+
+For debugging or scripting outside the handler pipeline, use `Unprotect-Datum`:
+
+```powershell
+$decrypted = '[ENC=PE9ianM...]' | Unprotect-Datum -Certificate '0A1B2C3D4E5F...'
+```
+
+`Unprotect-Datum` accepts the same `Certificate` / `Password` parameter sets as `Protect-Datum`.
+
+### How Decryption Works at Lookup Time
 
 Encrypted values in data files are prefixed with `[ENC=`:
 
@@ -155,9 +203,12 @@ AdminCredential: '[ENC=PE9ianM... (encrypted blob) ...=]'
 
 When Datum resolves this value, the `ProtectedDatum` handler:
 
-1. Detects the `[ENC=` prefix via its filter
-2. Decrypts the blob using the configured certificate or key
-3. Returns a `[PSCredential]` object
+1. Detects the `[ENC=` prefix via its filter (regex `^\[ENC=[\w\W]*\]$`)
+2. Strips the header/footer and decodes the base64 payload
+3. Decrypts the blob using the configured certificate or password
+4. Returns the original object (typically a `[PSCredential]`)
+
+Decrypted values are **cached in memory** for the duration of the session, so repeated lookups of the same encrypted blob do not re-run the decryption.
 
 This allows credentials to be stored securely in version control while being transparently decrypted at lookup time.
 
@@ -204,16 +255,26 @@ DatumHandlers:
 
 ### Usage
 
-Wrap PowerShell expressions in `[x= ... =]`:
+Wrap PowerShell expressions in `[x= ... =]`. The handler supports two expression types:
+
+**Scriptblocks** — wrapped in curly braces, executed via `& (& { ... })`:
 
 ```yaml
-# In a data file
 CurrentDate: '[x= { Get-Date -Format "yyyy-MM-dd" } =]'
 ComputerName: '[x= { $env:COMPUTERNAME } =]'
 DynamicPath: '[x= { Join-Path $env:ProgramFiles "MyApp" } =]'
 ```
 
-When resolved, the scriptblock is executed and the result replaces the marker.
+**Expandable strings** — wrapped in double quotes, expanded via `$ExecutionContext.InvokeCommand.ExpandString()`:
+
+```yaml
+Greeting: '[x= "Hello from $($Node.Name)" =]'
+LogPath: '[x= "C:\Logs\$($Node.Environment)\$($Node.Name)" =]'
+```
+
+Scriptblocks are the most common form and can contain any PowerShell code. Expandable strings are lighter-weight and useful for simple variable interpolation.
+
+When resolved, the expression is evaluated and the result replaces the marker.
 
 ### The `$File` Variable
 
@@ -276,11 +337,45 @@ DscTagging:
 
 As each layer file adds its own entry via the `Unique` merge strategy, the final RSOP contains a complete list of which files contributed to the node.
 
+### Nested Expression Resolution
+
+If an expression's result itself contains an `[x= ... =]` marker, the handler recursively resolves it. This allows chained references:
+
+```yaml
+# Global/Paths.yml
+BasePath: 'C:\App'
+
+# Roles/WebServer.yml
+AppPath: '[x= "$($Datum.Global.Paths.BasePath)\Web" =]'
+
+# AllNodes/Dev/SRV01.yml
+LogPath: '[x={ "$($Datum.Roles.WebServer.AppPath)\Logs" }=]'
+```
+
+The handler keeps resolving until no more markers remain in the result.
+
+### Self-Referencing Loop Prevention
+
+If an expression calls `Get-DatumRsop` and that call is already on the call stack (i.e. the expression was triggered *from* `Get-DatumRsop`), the handler returns the raw expression string instead of recursing infinitely. This makes it safe to use `Get-DatumRsop` inside expressions for cross-node lookups without risking an infinite loop.
+
+### Importing External Data
+
+Because expressions are arbitrary PowerShell, they can pull data from external sources such as CSV files, databases, or APIs:
+
+```yaml
+# Import IP addresses from a CSV file
+NetworkConfig:
+  IpAddress: '[x={ ($importedCsv | Where-Object ComputerName -eq $Node.Name).IpAddress }=]'
+```
+
+In the [DscWorkshop](https://github.com/dsccommunity/DscWorkshop) reference implementation, a CSV file is imported during the build and made available as a variable that expressions can query.
+
 ### Known Limitations
 
 - Expressions are evaluated in the current PowerShell session context
 - Complex expressions with nested quotes may need careful escaping
 - Error handling within expressions is the responsibility of the expression author (see [Error Handling](#error-handling))
+- Literal strings (wrapped in single quotes `'...'`) are **not** expanded — use scriptblocks or double-quoted strings
 
 ## Building Custom Handlers
 
@@ -347,5 +442,5 @@ The `DatumHandlers` key format is `<ModuleName>::<HandlerName>`:
 
 - [Datum.yml Reference](DatumYml.md) — Full configuration file reference
 - [README - Datum Handlers](../README.md#datum-handlers)
-- [Datum.ProtectedData on PowerShell Gallery](https://www.powershellgallery.com/packages/Datum.ProtectedData)
-- [Datum.InvokeCommand on PowerShell Gallery](https://www.powershellgallery.com/packages/Datum.InvokeCommand)
+- [Datum.ProtectedData on PowerShell Gallery](https://www.powershellgallery.com/packages/Datum.ProtectedData) — [Source on GitHub](https://github.com/gaelcolas/Datum.ProtectedData)
+- [Datum.InvokeCommand on PowerShell Gallery](https://www.powershellgallery.com/packages/Datum.InvokeCommand) — [Source on GitHub](https://github.com/raandree/Datum.InvokeCommand)
