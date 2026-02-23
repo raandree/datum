@@ -33,7 +33,7 @@ the [video recording](https://www.youtube.com/watch?v=SyYuxmiEgZ4&pp=ygULRHNjV29
     - [Data Layers and Precedence](#data-layers-and-precedence)
     - [Path Relative to $Node](#path-relative-to-node)
   - [4. Intended Usage](#4-intended-usage)
-    - [_Policy for Role 'WindowsServerDefault'_](#policy-for-role-windowsserverdefault)
+    - [_Policy for Role 'FileServer'_](#policy-for-role-fileserver)
     - [_Node Specific Data_](#node-specific-data)
     - [_Excerpt of DSC Composite Resource (aka. Configuration)_](#excerpt-of-dsc-composite-resource-aka-configuration)
     - [_Root Configuration_](#root-configuration)
@@ -200,21 +200,22 @@ Resolve-NodeProperty -PropertyPath 'Data2' -DatumTree $Datum
 
 Static overrides return the same data for every lookup. To make overrides **relative to a Node's metadata**:
 
-- A node named SRV01 has the role _SomeRole_ and is in _London_.
+- A node named DSCFile01 has the role _FileServer_ and is in _Frankfurt_.
 - The Role defines default data for Data1 and Data2.
-- Because SRV01 is in London, use Data2 from the _London_ location instead.
+- Because DSCFile01 is in Frankfurt, use Data2 from the _Frankfurt_ location instead.
 
 ```
 Demo2
 |   Datum.yml
 +---Locations
-|       London.yml
+|       Frankfurt.yml
+|       Singapore.yml
 \---Roles
-        SomeRole.yml
+        FileServer.yml
 ```
 
 ```yaml
-# SomeRole.yml
+# FileServer.yml
 Data1:
   Property11: RoleValue11
   Property12: RoleValue12
@@ -225,25 +226,25 @@ Data2:
 ```
 
 ```yaml
-# London.yml
+# Frankfurt.yml
 Data2:
-  Property21: London Override Value21
-  Property22: London Override Value22
+  Property21: Frankfurt Override Value21
+  Property22: Frankfurt Override Value22
 ```
 
 Define nodes with metadata:
 
 ```powershell
-$SRV01 = @{
-    Nodename = 'SRV01'
-    Location = 'London'
-    Role     = 'SomeRole'
+$DSCFile01 = @{
+    NodeName = 'DSCFile01'
+    Location = 'Frankfurt'
+    Role     = 'FileServer'
 }
 
-$SRV02 = @{
-    Nodename = 'SRV02'
-    Location = 'Paris'
-    Role     = 'SomeRole'
+$DSCWeb01 = @{
+    NodeName = 'DSCWeb01'
+    Location = 'Singapore'
+    Role     = 'WebServer'
 }
 ```
 
@@ -261,13 +262,13 @@ Now lookups are Node-aware:
 ```powershell
 $Datum = New-DatumStructure -DefinitionFile .\Datum.yml
 
-# SRV01 is in London - gets the London override for Data2
-Lookup 'Data2' -Node $SRV01 -DatumTree $Datum
-# Property21: London Override Value21
-# Property22: London Override Value22
+# DSCFile01 is in Frankfurt - gets the Frankfurt override for Data2
+Lookup 'Data2' -Node $DSCFile01 -DatumTree $Datum
+# Property21: Frankfurt Override Value21
+# Property22: Frankfurt Override Value22
 
-# SRV02 is in Paris - no override, gets the Role default
-Lookup 'Data2' -Node $SRV02 -DatumTree $Datum
+# DSCWeb01 is in Singapore - no override, gets the Role default
+Lookup 'Data2' -Node $DSCWeb01 -DatumTree $Datum
 # Property21: RoleValue21
 # Property22: RoleValue22
 ```
@@ -286,70 +287,65 @@ A scalable implementation regroups:
 - **Nodes** implementing that role
 - **Configurations** (DSC Composite Resources) included in the role
 
-### _Policy for Role 'WindowsServerDefault'_
+### _Policy for Role 'FileServer'_
 
 ```yaml
-# WindowsServerDefault.yml
+# FileServer.yml
 Configurations:
-  - Shared1
-  - SoftwareBaseline
+  - FileSystemObjects
+  - RegistryValues
 
-Shared1:
-  DestinationPath: C:\MyRoleParam.txt
-  Param1: This is the Role Value!
+WindowsFeatures:
+  Names:
+    - File-Services
 
-SoftwareBaseline:
-  Sources:
-    - Name: chocolatey
-      Disabled: false
-      Source: https://chocolatey.org/api/v2
-  Packages:
-    - Name: chocolatey
-    - Name: NotepadPlusplus
-      Version: '7.5.2'
-    - Name: Putty
+FileSystemObjects:
+  Items:
+    - DestinationPath: C:\Test
+      Type: Directory
+    - DestinationPath: C:\Test\Test1File1.txt
+      Type: File
+      Contents: Some test data
+
+RegistryValues:
+  Values:
+    - Key: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Parameters
+      ValueName: NtpServer
+      ValueData: pool.ntp.org,0x9
+      ValueType: String
+      Ensure: Present
+      Force: true
 ```
 
-Adding a new package to the list is self-documenting and does not require any DSC or Chocolatey knowledge.
+Adding a new file or registry value to the list is self-documenting and does not require deep DSC knowledge.
 
 ### _Node Specific Data_
 
 Define the node with the least amount of uniqueness:
 
 ```yaml
-# SRV01.yml
-NodeName: 9d8cc603-5c6f-4f6d-a54a-466a6180b589
-role: WindowsServerDefault
-Location: LON
+# DSCFile01.yml
+NodeName: DSCFile01
+Environment: Dev
+Role: FileServer
+Location: Frankfurt
+Baseline: Server
 ```
 
 ### _Excerpt of DSC Composite Resource (aka. Configuration)_
 
 ```powershell
-Configuration SoftwareBaseline {
+Configuration FileSystemObjects {
     Param(
-        $PackageFeedUrl = 'https://chocolatey.org/api/v2',
-        $Sources = @(),
-        $Packages
+        $Items
     )
 
     Import-DscResource -ModuleName PSDesiredStateConfiguration
-    Import-DscResource -ModuleName Chocolatey -ModuleVersion 0.0.46
 
-    ChocolateySoftware ChocoInstall {
-        Ensure         = 'Present'
-        PackageFeedUrl = $PackageFeedUrl
-    }
-
-    foreach ($source in $Sources) {
-        if (!$source.Ensure) { $source.add('Ensure', 'Present') }
-        Get-DscSplattedResource -ResourceName ChocolateySource -ExecutionName "$($Source.Name)_src" -Properties $source
-    }
-
-    foreach ($Package in $Packages) {
-        if (!$Package.Ensure) { $Package.add('Ensure', 'Present') }
-        if (!$Package.Version) { $Package.add('version', 'latest') }
-        Get-DscSplattedResource -ResourceName ChocolateyPackage -ExecutionName "$($Package.Name)_pkg" -Properties $Package
+    foreach ($Item in $Items) {
+        if (!$Item.Ensure) { $Item.add('Ensure', 'Present') }
+        $executionName = "FileSystemObject_$($Item.DestinationPath -replace '[:\\]', '_')"
+        Get-DscSplattedResource -ResourceName File -ExecutionName $executionName -Properties $Item
     }
 }
 ```
@@ -362,8 +358,7 @@ The root configuration dynamically processes each node. **This file does not nee
 configuration "RootConfiguration"
 {
     Import-DscResource -ModuleName PSDesiredStateConfiguration
-    Import-DscResource -ModuleName SharedDscConfig -ModuleVersion 0.0.3
-    Import-DscResource -ModuleName Chocolatey -ModuleVersion 0.0.46
+    Import-DscResource -ModuleName CommonTasks
 
     node $ConfigurationData.AllNodes.NodeName {
         (Lookup 'Configurations').Foreach{
@@ -421,10 +416,22 @@ DatumStructure:
     StoreProvider: Datum::File
     StoreOptions:
       Path: "./Roles"
-  - StoreName: Environments
+  - StoreName: Environment
     StoreProvider: Datum::File
     StoreOptions:
-      Path: "./Environments"
+      Path: "./Environment"
+  - StoreName: Locations
+    StoreProvider: Datum::File
+    StoreOptions:
+      Path: "./Locations"
+  - StoreName: Baselines
+    StoreProvider: Datum::File
+    StoreOptions:
+      Path: "./Baselines"
+  - StoreName: Global
+    StoreProvider: Datum::File
+    StoreOptions:
+      Path: "./Global"
 ```
 
 #### Store Provider
@@ -432,7 +439,7 @@ DatumStructure:
 Store providers abstract the underlying data storage and format, providing consistent **key/value lookups**. The built-in File Provider uses the **dot notation** for access:
 
 ```powershell
-$Datum.AllNodes.SERVER01.MetaData.Subkey  # returns 'Data Value'
+$Datum.AllNodes.Dev.DSCFile01.NodeName  # returns 'DSCFile01'
 ```
 
 Data stored in different formats (YAML, JSON, PSD1) is unified under this same access pattern.
@@ -443,23 +450,25 @@ The `Datum.yml` defines a **ResolutionPrecedence** — an ordered list of prefix
 
 ```yaml
 ResolutionPrecedence:
-  - 'AllNodes\$($Node.Environment)\$($Node.Name)'
-  - 'AllNodes\$($Node.Environment)\All'
-  - 'Environments\$($Node.Environment)'
-  - 'SiteData\$($Node.Location)'
+  - 'AllNodes\$($Node.Environment)\$($Node.NodeName)'
+  - 'Environment\$($Node.Environment)'
+  - 'Locations\$($Node.Location)'
   - 'Roles\$($Node.Role)'
-  - 'Roles\All'
+  - 'Baselines\Security'
+  - 'Baselines\$($Node.Baseline)'
+  - 'Baselines\DscLcm'
 ```
 
 A lookup for a property path (e.g. `'Configurations'`) tries each prefix:
 
 ```powershell
-$Datum.AllNodes.($Node.Environment).($Node.Name).Configurations
-$Datum.AllNodes.($Node.Environment).All.Configurations
-$Datum.Environments.($Node.Environment).Configurations
-$Datum.SiteData.($Node.Location).Configurations
+$Datum.AllNodes.($Node.Environment).($Node.NodeName).Configurations
+$Datum.Environment.($Node.Environment).Configurations
+$Datum.Locations.($Node.Location).Configurations
 $Datum.Roles.($Node.Role).Configurations
-$Datum.Roles.All.Configurations
+$Datum.Baselines.Security.Configurations
+$Datum.Baselines.($Node.Baseline).Configurations
+$Datum.Baselines.DscLcm.Configurations
 ```
 
 By default, the **first value found** is returned (MostSpecific strategy). Merge strategies can change this behaviour.
@@ -469,11 +478,12 @@ By default, the **first value found** is returned (MostSpecific strategy). Merge
 Node metadata drives which paths are resolved:
 
 ```yaml
-# SRV01.yml
-NodeName: 9d8cc603-5c6f-4f6d-a54a-466a6180b589
-role: WindowsServerDefault
-Location: LON
-Environment: DEV
+# DSCFile01.yml
+NodeName: DSCFile01
+Environment: Dev
+Role: FileServer
+Location: Frankfurt
+Baseline: Server
 ```
 
 The `$Node` variable is substituted into the ResolutionPrecedence paths at lookup time, so each node resolves different data paths.
@@ -497,14 +507,22 @@ Set a global default and per-key overrides in `Datum.yml`:
 default_lookup_options: MostSpecific
 
 lookup_options:
-  Configurations: Unique
-  SoftwareBaseline: hash
-  SoftwareBaseline\Packages:
-    merge_hash_array: DeepTuple
+  Configurations:
+    merge_basetype_array: Unique
+  FileSystemObjects:
+    merge_hash: deep
+  FileSystemObjects\Items:
+    merge_hash_array: UniqueKeyValTuples
     merge_options:
       tuple_keys:
-        - Name
-        - Version
+        - DestinationPath
+  RegistryValues:
+    merge_hash: deep
+  RegistryValues\Values:
+    merge_hash_array: UniqueKeyValTuples
+    merge_options:
+      tuple_keys:
+        - Key
 ```
 
 #### Strategy Presets
@@ -556,17 +574,17 @@ If you want merged data below a top-level key, you must declare merge strategies
 
 ```yaml
 lookup_options:
-  SoftwareBaseline: hash                    # merge top-level keys
-  SoftwareBaseline\Packages:                # also merge the nested Packages array
-    merge_hash_array: DeepTuple
+  FileSystemObjects: deep                   # merge top-level keys
+  FileSystemObjects\Items:                  # also merge the nested Items array
+    merge_hash_array: UniqueKeyValTuples
     merge_options:
       tuple_keys:
-        - Name
+        - DestinationPath
 ```
 
-Without the `SoftwareBaseline: hash` entry, a lookup of just `SoftwareBaseline` would return the most specific value without walking down to merge `Packages`.
+Without the `FileSystemObjects: deep` entry, a lookup of just `FileSystemObjects` would return the most specific value without walking down to merge `Items`.
 
-However, a direct lookup of `SoftwareBaseline\Packages` would work because it does not need to walk down.
+However, a direct lookup of `FileSystemObjects\Items` would work because it does not need to walk down.
 
 ### Knockout Prefix
 
@@ -575,15 +593,15 @@ The **knockout prefix** (default: `--`) allows you to remove items from merged r
 **Base-type arrays**: Remove specific items during merge.
 
 ```yaml
-# Role (generic layer)
+# Baseline (generic layer - Security.yml)
 WindowsFeatures:
-  Name:
+  Names:
     - Telnet-Client
     - File-Services
 
-# Node override (specific layer)
+# Role override (specific layer - FileServer.yml)
 WindowsFeatures:
-  Name:
+  Names:
     - -Telnet-Client     # Knocks out 'Telnet-Client' from the merged result
     - File-Services
 ```
