@@ -1,12 +1,12 @@
 # Datum
 ## about_Datum
 
-# SHORT DESCRIPTION
+# Short Description
 Datum is a PowerShell module that manages configuration data in a
 hierarchical model, enabling lookup and merge of values from
 multiple layers of data files (YAML, JSON, PSD1).
 
-# LONG DESCRIPTION
+# Long Description
 Datum provides a way to organise configuration data into layers,
 where generic defaults can be overridden by more specific values.
 This is especially useful for managing DSC (Desired State
@@ -71,7 +71,7 @@ Computes the Resultant Set of Policy for all or filtered nodes.
 
     $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes
 
-# EXAMPLES
+# Examples
 
 ## Example 1: Basic Hierarchy Lookup
 
@@ -91,7 +91,7 @@ Computes the Resultant Set of Policy for all or filtered nodes.
     $value = Lookup 'SomeProperty' -Node $Node `
         -DatumTree $Datum -DefaultValue 'FallbackValue'
 
-# NOTE
+# Note
 Datum requires the powershell-yaml module. Install it from the
 PowerShell Gallery:
 
@@ -103,7 +103,7 @@ Optional modules for extended functionality:
 
 Datum works on PowerShell 5.1 and PowerShell 7+.
 
-# TROUBLESHOOTING NOTE
+# Troubleshooting
 If lookups return unexpected values, check:
 - Resolution precedence order in Datum.yml
 - Merge strategy configuration for the key
@@ -114,14 +114,14 @@ If RSOP results seem stale, the cache may contain old data.
 Use Clear-DatumRsopCache or pass -IgnoreCache to
 Get-DatumRsop.
 
-# SEE ALSO
-- Datum documentation: docs/Merging.md
-- Datum documentation: docs/DatumHandlers.md
-- Datum documentation: docs/ComposingRoles.md
+# See Also
+- [Merging Strategies](Merging.md)
+- [Datum Handlers](DatumHandlers.md)
+- [Code Layers](CodeLayers.md)
 - DSC Workshop: https://github.com/dsccommunity/DscWorkshop/
 - PowerShell Gallery: https://www.powershellgallery.com/packages/datum
 
-# KEYWORDS
+# Keywords
 - Datum
 - DSC
 - Configuration Data
