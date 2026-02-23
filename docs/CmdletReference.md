@@ -133,17 +133,7 @@ $merged = Merge-Datum -StartingPath 'MyKey' -ReferenceDatum $ref -DifferenceDatu
 Computes the **Resultant Set of Policy** for one or more nodes. This fully resolves and merges all hierarchy layers, producing the final configuration data for each node.
 
 ```powershell
-# RSOP for all nodes
 $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes
-
-# RSOP for a specific node
-$rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes -Filter { $_.NodeName -eq 'SRV01' }
-
-# RSOP with source tracking
-$rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes -IncludeSource
-
-# Force recalculation (ignore cache)
-$rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes -IgnoreCache
 ```
 
 | Parameter | Type | Required | Default | Description |
@@ -156,35 +146,21 @@ $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes -IgnoreCache
 | `IncludeSource` | `[switch]` | No | — | Include source file information in the output |
 | `RemoveSource` | `[switch]` | No | — | Remove source tracking data from the output |
 
-**Behaviour Notes:**
-- Results are cached per node name for performance
-- Use `Clear-DatumRsopCache` or `-IgnoreCache` after data changes
-- The `CompositionKey` parameter controls which key lists the configurations to process (default: `Configurations`)
-- When `-IncludeSource` is used, each value includes metadata about which data file it came from
+For usage examples (filtering, source tracking, caching, composition key) see [RSOP](RSOP.md).
 
 ---
 
 ### Get-DatumRsopCache
 
-Returns the current contents of the RSOP cache.
-
-```powershell
-$cache = Get-DatumRsopCache
-```
-
-No parameters. Returns the cache hashtable.
+Returns the current contents of the RSOP cache. No parameters. Returns the cache hashtable.
 
 ---
 
 ### Clear-DatumRsopCache
 
-Clears the RSOP cache. Call this after modifying data files to ensure fresh results.
+Clears the RSOP cache. Call this after modifying data files to ensure fresh results. No parameters. No output.
 
-```powershell
-Clear-DatumRsopCache
-```
-
-No parameters. No output.
+See [RSOP — Caching](RSOP.md#caching) for details.
 
 ---
 

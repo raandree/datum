@@ -236,21 +236,7 @@ lookup_options:
 
 Exact matches always take priority over regex matches.
 
-#### Strategy Properties
-
-| Property | Values | Description |
-|----------|--------|-------------|
-| `merge_hash` | `MostSpecific`, `hash`, `deep` | How to merge hashtables |
-| `merge_basetype_array` | `MostSpecific`, `Unique`, `Sum` | How to merge scalar arrays |
-| `merge_hash_array` | `MostSpecific`, `Sum`, `UniqueKeyValTuples`, `DeepTuple` | How to merge hashtable arrays |
-| `merge_options` | hashtable | Additional options (see below) |
-
-#### merge_options
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `knockout_prefix` | string | `--` (for hash/deep presets) | Prefix to remove items during merge |
-| `tuple_keys` | string[] | — | Keys used to match items in hash arrays |
+For the full list of strategy properties (`merge_hash`, `merge_basetype_array`, `merge_hash_array`, `merge_options`) and their values, see [Merging Strategies](Merging.md#configuring-merge-strategies).
 
 ---
 
@@ -271,22 +257,7 @@ DatumHandlers:
 | `CommandOptions` | hashtable | No | Parameters passed to the handler's action function |
 | `SkipDuringLoad` | bool | No | If `true`, handler runs only at lookup time, not during initial file load |
 
-#### Handler Function Naming
-
-The key `<ModuleName>::<HandlerName>` maps to:
-
-- Filter: `<ModuleName>\Test-<HandlerName>Filter`
-- Action: `<ModuleName>\Invoke-<HandlerName>Action`
-
-#### Common Handlers
-
-| Handler | Key | Purpose |
-|---------|-----|---------|
-| Built-in Test | `Datum::TestHandler` | Demonstration/development handler |
-| Protected Data | `Datum.ProtectedData::ProtectedDatum` | Decrypt `[ENC=...]` credential values |
-| Invoke Command | `Datum.InvokeCommand::InvokeCommand` | Evaluate `[x= ... =]` PowerShell expressions |
-
-See [Datum Handlers](DatumHandlers.md) for detailed documentation.
+The key `<ModuleName>::<HandlerName>` maps to filter and action functions in the specified module. See [Datum Handlers](DatumHandlers.md) for the naming convention, built-in handlers, and how to create custom handlers.
 
 ---
 
@@ -302,7 +273,7 @@ DscLocalConfigurationManagerKeyName: LcmConfig
 
 #### DatumHandlersThrowOnError
 
-When set to `true`, any error thrown by a Datum Handler will propagate as a terminating error rather than being silently swallowed. **Recommended for production use** — without this, a handler failure (e.g. a failed decryption or expression) can return the raw marker string (such as `[ENC=...]`) instead of the decrypted value, which is difficult to diagnose.
+When `true`, handler errors propagate as terminating errors instead of being silently swallowed. **Recommended for production use.** See [Datum Handlers — Error Handling](DatumHandlers.md#error-handling) for details.
 
 ```yaml
 DatumHandlersThrowOnError: true

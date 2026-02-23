@@ -26,13 +26,12 @@ Data is organised in layers (e.g. Node, Location, Environment,
 Role). A lookup walks the layers in order from most specific to
 most generic and returns the first value found, or merges values
 according to the configured merge strategy.
+See [Datum.yml Reference](DatumYml.md) for configuration details.
 
 ### Merge Strategies
-Datum supports several merge strategies:
-- MostSpecific: Return the first value found (default)
-- hash: Merge top-level hashtable keys
-- deep: Recursively merge hashtable keys and arrays
-Per-key strategies can be configured in Datum.yml.
+Datum supports several merge strategies (MostSpecific, hash,
+deep) with per-key overrides.
+See [Merging Strategies](Merging.md) for full documentation.
 
 ### Data Formats
 The built-in File Provider reads YAML, JSON, and PSD1 files.
@@ -40,18 +39,20 @@ YAML is the most commonly used format. All formats are unified
 under a consistent dot-notation access pattern.
 
 ### Datum Handlers
-Handlers transform values at lookup time. Built-in support
-exists for:
-- Datum.ProtectedData: Encrypted PSCredential objects
-- Datum.InvokeCommand: Dynamic PowerShell expressions
-Custom handlers can be built as PowerShell modules.
+Handlers transform values at lookup time (e.g. decrypting
+credentials or evaluating dynamic expressions).
+See [Datum Handlers](DatumHandlers.md) for full documentation.
 
 ### RSOP (Resultant Set of Policy)
 Get-DatumRsop computes the fully resolved configuration data
 for one or more nodes, applying all hierarchy layers, merge
 strategies and handlers.
+See [RSOP](RSOP.md) for full documentation.
 
 ## Key Functions
+
+See [Cmdlet Reference](CmdletReference.md) for complete
+parameters and usage of all public functions.
 
 ### Resolve-NodeProperty (aliases: Lookup, Resolve-DscProperty)
 The primary lookup function. Resolves a property path through
@@ -69,15 +70,6 @@ Creates a Datum hierarchy object from a Datum.yml definition.
 Computes the Resultant Set of Policy for all or filtered nodes.
 
     $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes
-
-### Merge-Datum
-Merges two datum values using the specified merge strategy.
-
-    $merged = Merge-Datum -ReferenceDatum $ref `
-        -DifferenceDatum $diff -Strategies @{}
-
-### Clear-DatumRsopCache / Get-DatumRsopCache
-Manage the RSOP cache for performance optimisation.
 
 # EXAMPLES
 
