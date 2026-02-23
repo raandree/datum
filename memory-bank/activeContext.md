@@ -1,7 +1,7 @@
 # Active Context
 
-## Current State (as of 2026-02-22)
-The project is on the `main` branch with a clean working directory. The latest commit is `99debf7` (updating readme video). The current branch `feature/docs` tracks `main`.
+## Current State (as of 2026-02-23)
+The project is on the `feature/docs` branch (tracking `main`). Recent work has focused on **documentation quality** — auditing and fixing code samples in all docs, and correcting the `-IncludeSource`/`-RemoveSource` documentation for `Get-DatumRsop`.
 
 ## Current Work Focus
 The project has **unreleased changes** (tracked in CHANGELOG.md under [Unreleased]) that include:
@@ -32,7 +32,7 @@ The project has **unreleased changes** (tracked in CHANGELOG.md under [Unrelease
 - Fix the merge logic bug causing 3 skipped tests (Ethernet 3 Gateway/DnsServer/InterfaceCount for DSCFile01 in InvokeCommand handler context)
 - Consider additional test coverage for knockout scenarios
 - Enable code coverage (currently threshold = 0)
-- No open PRs or active feature branches visible
+- Consider making `-IncludeSource` and `-RemoveSource` mutually exclusive at the parameter level (ValidateScript or ParameterSets) rather than silent precedence
 
 ## Active Decisions
 - All tests now use Pester 5 syntax (migration complete)
@@ -48,3 +48,6 @@ The project has **unreleased changes** (tracked in CHANGELOG.md under [Unrelease
 - Private functions are tested via `InModuleScope -ModuleName Datum`
 - RSOP tests output resolved YAML files to `output/RSOP/` and `output/RsopWithSource/`
 - ProtectedData handler errors are expected in tests (wrong encryption key = graceful fallback)
+- `-IncludeSource` and `-RemoveSource` are mutually exclusive — `if/elseif` branching means `-IncludeSource` always wins when both are specified
+- Source tracking uses `__File` NoteProperties on values (not `__source` hashtable keys); `-IncludeSource` renders these as right-aligned inline annotations via `Get-RsopValueString`
+- AllNodes iteration code must handle both flat and nested directory layouts (docs now show both patterns)

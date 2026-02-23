@@ -81,9 +81,23 @@ Computes the Resultant Set of Policy for all or filtered nodes.
 
 ## Example 2: RSOP for All Nodes
 
+This pattern works for both flat (`AllNodes/SRV01.yml`) and
+nested (`AllNodes/Dev/SRV01.yml`) AllNodes layouts:
+
     $Datum = New-DatumStructure -DefinitionFile .\Datum.yml
-    $AllNodes = @($Datum.AllNodes.psobject.Properties |
-        ForEach-Object { @{} + $Datum.AllNodes.($_.Name) })
+    $AllNodes = @(
+        foreach ($property in $Datum.AllNodes.psobject.Properties) {
+            $node = $Datum.AllNodes.($property.Name)
+            if ($node -is [System.Collections.IDictionary]) {
+                @{} + $node
+            }
+            else {
+                foreach ($childProperty in $node.psobject.Properties) {
+                    @{} + $node.($childProperty.Name)
+                }
+            }
+        }
+    )
     $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes
 
 ## Example 3: Using Default Values

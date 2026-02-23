@@ -144,7 +144,7 @@ $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes
 | `Filter` | `[scriptblock]` | No | `{}` (no filter) | Filter to select specific nodes |
 | `IgnoreCache` | `[switch]` | No | — | Skip the cache and force recalculation |
 | `IncludeSource` | `[switch]` | No | — | Include source file information in the output |
-| `RemoveSource` | `[switch]` | No | — | Remove source tracking data from the output |
+| `RemoveSource` | `[switch]` | No | — | Strip internal `__File` NoteProperties from output values (mutually exclusive with `IncludeSource`; if both are specified, `IncludeSource` wins) |
 
 For usage examples (filtering, source tracking, caching, composition key) see [RSOP](RSOP.md).
 

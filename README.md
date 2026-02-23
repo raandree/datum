@@ -614,17 +614,30 @@ Result: `File-Services` only (the knockout item, prefixed with `--`, and the mat
 
 ### RSOP (Resultant Set of Policy)
 
-`Get-DatumRsop` computes the **Resultant Set of Policy** for nodes — the fully resolved, merged configuration data after all hierarchy layers are applied:
+`Get-DatumRsop` computes the **Resultant Set of Policy** for nodes — the fully resolved, merged configuration data after all hierarchy layers are applied.
+
+Build the `$AllNodes` array from the Datum tree. The following pattern works regardless of whether your `AllNodes` directory is flat (`AllNodes/<NodeName>.yml`) or nested by environment (`AllNodes/<Environment>/<NodeName>.yml` — as used by [DscWorkshop](https://github.com/dsccommunity/DscWorkshop)):
 
 ```powershell
 $Datum = New-DatumStructure -DefinitionFile .\Datum.yml
 $AllNodes = @(
-    $Datum.AllNodes.psobject.Properties | ForEach-Object {
-        $Node = $Datum.AllNodes.($_.Name)
-        (@{} + $Node)
+    foreach ($property in $Datum.AllNodes.psobject.Properties) {
+        $node = $Datum.AllNodes.($property.Name)
+        if ($node -is [System.Collections.IDictionary]) {
+            @{} + $node
+        }
+        else {
+            foreach ($childProperty in $node.psobject.Properties) {
+                @{} + $node.($childProperty.Name)
+            }
+        }
     }
 )
+```
 
+With the `$AllNodes` array built, compute the RSOP:
+
+```powershell
 # RSOP for all nodes
 $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes
 

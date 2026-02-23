@@ -24,11 +24,17 @@
 - [x] Build system update to Sampler 0.119.0-preview0005
 - [x] Merge-DatumArray: tuple key values converted to datum before merging
 
+## Documentation Improvements (2026-02-23)
+- [x] Fixed AllNodes iteration code samples for nested directory layouts (README.md, RSOP.md, AboutDatum.md)
+- [x] Fixed `-IncludeSource` output examples (was fake `__source` YAML keys, now shows actual right-aligned annotations)
+- [x] Documented `-IncludeSource`/`-RemoveSource` mutual exclusivity and actual behaviour
+- [x] Fixed troubleshooting section (removed nonexistent `$rsop.SomeKey.__source` pattern)
+- [x] Updated CmdletReference.md parameter descriptions for accuracy
+
 ## What's Left to Build / Open Areas
 - [ ] Release next version with all unreleased changes
 - [ ] Additional store providers beyond FileProvider (community-driven)
 - [ ] Performance optimization for large hierarchies
-- [ ] More comprehensive documentation (docs/ folder has skeleton content)
 - [ ] Code coverage improvements (threshold currently set to 0 in build.yaml)
 
 ## Known Issues

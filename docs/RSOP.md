@@ -16,15 +16,29 @@ The **Resultant Set of Policy** (RSOP) computes the fully resolved configuration
 ```powershell
 # Load the hierarchy
 $Datum = New-DatumStructure -DefinitionFile .\Datum.yml
+```
 
-# Build the AllNodes array from the Datum tree
+Build the `$AllNodes` array from the Datum tree. The following pattern works regardless of whether your `AllNodes` directory is flat (`AllNodes/DSCFile01.yml`) or nested by environment (`AllNodes/Dev/DSCFile01.yml`):
+
+```powershell
 $AllNodes = @(
-    $Datum.AllNodes.psobject.Properties | ForEach-Object {
-        $Node = $Datum.AllNodes.($_.Name)
-        (@{} + $Node)
+    foreach ($property in $Datum.AllNodes.psobject.Properties) {
+        $node = $Datum.AllNodes.($property.Name)
+        if ($node -is [System.Collections.IDictionary]) {
+            @{} + $node
+        }
+        else {
+            foreach ($childProperty in $node.psobject.Properties) {
+                @{} + $node.($childProperty.Name)
+            }
+        }
     }
 )
+```
 
+With the `$AllNodes` array built:
+
+```powershell
 # Compute RSOP for all nodes
 $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes
 ```
@@ -66,27 +80,33 @@ This is invaluable for debugging — when a value is unexpected, the source info
 
 ### Example Output with Source
 
-When `-IncludeSource` is used, each resolved value includes a `__source` key indicating the file path:
+When `-IncludeSource` is used, each resolved leaf value gets a right-aligned annotation showing which file in the hierarchy provided it:
 
 ```yaml
-# RSOP output for DSCWeb01
-NodeName: DSCWeb01
+NodeName: DSCWeb01                                                  AllNodes\DSCWeb01
 Configurations:
   - FileDSC
   - Shared1
 Shared1:
-  DestinationPath: C:\MyRoleParam.txt
-  Param1: This is the Role Value!
-  __source: Roles/Role1.yml
+  DestinationPath: C:\MyRoleParam.txt                              Roles\Role1
+  Param1: This is the Role Value!                                   Roles\Role1
 ```
 
-### Removing Source Data
+The annotation column can be adjusted with the `$env:DatumRsopIndentation` environment variable (default: 120).
 
-Use `-RemoveSource` to strip source tracking metadata from the output after it has been added:
+### Removing Source Metadata
+
+> **Note:** `-IncludeSource` and `-RemoveSource` are **mutually exclusive** in behaviour. When both are specified, `-IncludeSource` takes precedence and `-RemoveSource` is ignored.
+
+Every value resolved through the Datum hierarchy carries an internal `__File` NoteProperty that records the originating file. These NoteProperties are normally invisible (they don't appear in `ConvertTo-Yaml` output), but they are present on the objects.
+
+Use `-RemoveSource` (without `-IncludeSource`) to strip these `__File` NoteProperties from the output, returning clean base objects:
 
 ```powershell
-$rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes -IncludeSource -RemoveSource
+$rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes -RemoveSource
 ```
+
+This is useful when you need to pass RSOP objects to consumers that might be affected by the extra NoteProperties.
 
 ## Caching
 
@@ -152,9 +172,19 @@ Configurations:
 
 ```powershell
 $Datum = New-DatumStructure -DefinitionFile .\Datum.yml
+
+# Build AllNodes (works for both flat and nested AllNodes layouts)
 $AllNodes = @(
-    $Datum.AllNodes.psobject.Properties | ForEach-Object {
-        (@{} + $Datum.AllNodes.($_.Name))
+    foreach ($property in $Datum.AllNodes.psobject.Properties) {
+        $node = $Datum.AllNodes.($property.Name)
+        if ($node -is [System.Collections.IDictionary]) {
+            @{} + $node
+        }
+        else {
+            foreach ($childProperty in $node.psobject.Properties) {
+                @{} + $node.($childProperty.Name)
+            }
+        }
     }
 )
 
@@ -212,8 +242,9 @@ $rsop = Get-DatumRsop -Datum $Datum -AllNodes $AllNodes -IncludeSource -Filter {
     $_.NodeName -eq 'ProblemNode'
 }
 
-# Inspect the source of a specific key
-$rsop.SomeKey.__source
+# The output values are strings with right-aligned source file annotations.
+# Pipe to ConvertTo-Yaml or write to a file to inspect.
+$rsop | ConvertTo-Yaml
 ```
 
 ### Performance

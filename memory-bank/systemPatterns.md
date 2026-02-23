@@ -42,7 +42,12 @@ Node (extends Hashtable, represents a DSC node)
 #### 5. RSOP Engine (`Get-DatumRsop`)
 - Resolves a complete picture of all configurations for a node
 - Caches results per node name (``)
-- Supports source tracking (`-IncludeSource`) and cache management
+- Supports source tracking and cache management
+- Source tracking detail: Every resolved value carries a `__File` NoteProperty (attached during resolution). Three output modes:
+  - Default: Returns raw cached objects (NoteProperties present but invisible to YAML serialization)
+  - `-IncludeSource`: Processes via `Expand-RsopHashtable` → `Get-RsopValueString` with `-AddSourceInformation`, producing strings with right-aligned file path annotations (column width controlled by `$env:DatumRsopIndentation`, default 120)
+  - `-RemoveSource`: Processes via `Expand-RsopHashtable` → `Get-RsopValueString` without `-AddSourceInformation`, returning `.psobject.BaseObject` to strip `__File` NoteProperties
+- `-IncludeSource` and `-RemoveSource` are mutually exclusive (`if/elseif` — IncludeSource wins when both specified)
 
 #### 6. Data Handlers (`Invoke-DatumHandler`, `ConvertTo-Datum`)
 - Extensible handler system via `DatumHandlers` in `Datum.yml`
