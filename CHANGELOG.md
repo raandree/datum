@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added complete documentation system under `docs/` with index and
+  seven reference guides:
+  - `AboutDatum.md` — module overview, core concepts, and examples.
+  - `CmdletReference.md` — full parameter reference for all public
+    functions.
+  - `DatumYml.md` — `Datum.yml` configuration reference (stores,
+    resolution precedence, merge defaults, handlers).
+  - `Merging.md` — merge strategies, data types, knockout prefix,
+    and per-key configuration.
+  - `DatumHandlers.md` — handler system, ProtectedData, InvokeCommand,
+    and custom handler authoring.
+  - `RSOP.md` — RSOP computation, filtering, source tracking, caching,
+    and troubleshooting.
+  - `CodeLayers.md` — conceptual guide to layering DSC code with Roles
+    and Configurations backed by Datum data.
+- Documented `$env:DatumRsopIndentation` environment variable in
+  RSOP.md.
+- Added AllNodes iteration examples for both flat and nested directory
+  layouts in README.md, RSOP.md, and AboutDatum.md.
+
+### Changed
+
+- Rewrote README.md with structured sections, table of contents,
+  installation guide, merge strategy reference, handler documentation,
+  and public function catalogue.
+
+### Fixed
+
+- Fixed AllNodes iteration code samples that failed with nested
+  directory layouts (e.g. `AllNodes/Dev/DSCFile01.yml`).
+- Fixed `-IncludeSource` output examples to show actual right-aligned
+  annotations instead of fake `__source` YAML keys.
+- Fixed troubleshooting section referencing nonexistent
+  `$rsop.SomeKey.__source` pattern.
+- Documented `-IncludeSource`/`-RemoveSource` mutual exclusivity in
+  RSOP.md and CmdletReference.md.
+
 ## [0.41.0] - 2026-02-03
 
 ### Added
