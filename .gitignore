@@ -1,16 +1,31 @@
+# Build output
 output/
 
-**.bak
-*.local.*
-!**/README.md
-.kitchen/
+# Backup files
+*.bak
 
+# Local overrides
+*.local.*
+
+# Test results and coverage
+*.coverage
+testResults/
+CodeCoverage/
+
+# Resolved dependencies
+.packages/
+
+# Visual Studio / VS Code artifacts
 *.suo
 *.user
-*.coverage
-.vs
+.vs/
+
+# PowerShell project files (ISE/PowerShell Tools)
 .psproj
-.sln
+*.sln
+
+# Sampler temp files
 markdownissues.txt
-node_modules
-package-lock.json
+
+# Do not ignore README files
+!**/README.md
